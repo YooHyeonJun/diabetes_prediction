@@ -1,106 +1,159 @@
 import React, { useState } from "react";
-import { Container, Typography, TextField, Button, Box, Paper, List, ListItem, ListItemText } from "@mui/material";
+import {
+  Container, Typography, TextField, Checkbox, FormControlLabel,
+  Select, MenuItem, Radio, RadioGroup, FormControl, FormLabel,
+  Button, Grid, Paper, Box, CircularProgress
+} from "@mui/material";
+import { predictDiabetes } from "./api";
+import { FEATURE_META, FEATURE_NAMES, buildPayload } from "./utils/payLoad";
+import ShapChart from "./components/ShapChart";
 
 export default function DiabetesPrediction() {
-  const [formData, setFormData] = useState({
-    age: "",
-    bmi: "",
-    glucose: "",
-    bloodPressure: ""
-  });
-  const [result, setResult] = useState(null);
+  /* --- state ------------------------------------------------- */
+  const [form, setForm] = useState(
+    Object.fromEntries(FEATURE_NAMES.map((k) => [k, ""]))
+  );
+  const [result,  setResult ] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+  /* --- handlers --------------------------------------------- */
+  const handleChange = (key) => (e) => {
+    const value =
+      e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    try {
+      setLoading(true);
+      const payload = buildPayload(form);
+      const { data } = await predictDiabetes(payload);
 
-    // TODO: 여기에 AI 예측 API 연동 로직 추가
-    // 예: fetch('/api/predict', { method: 'POST', body: JSON.stringify(formData) }) ...
+      const shapArr = Object.entries(data.shap)
+        .map(([feature, impact]) => ({ feature, impact }))
+        .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+        .slice(0, 10);
 
-    const mockResult = {
-      risk: 85,
-      interpretation: "High",
-      shapLime: [
-        { feature: "Age", impact: "+20% 영향 (High 영향)" },
-        { feature: "BMI", impact: "+15% 영향 (High 영향)" },
-        { feature: "Glucose", impact: "+25% 영향 (Critical 영향)" },
-        { feature: "Blood Pressure", impact: "+10% 영향 (Moderate 영향)" }
-      ]
-    };
-    setResult(mockResult);
+      setResult({
+        risk : +(data.prob * 100).toFixed(1),
+        interpretation: data.prob > 0.5 ? "High" : "Low",
+        shap : shapArr,
+      });
+    } catch (err) {
+      console.error(err);
+      alert("예측 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
   };
 
+  /* --- render field ----------------------------------------- */
+  const renderField = (m) => {
+    switch (m.type) {
+      case "checkbox":
+        return (
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={!!form[m.key]}
+                onChange={handleChange(m.key)}
+              />
+            }
+            label={m.label}
+          />
+        );
+      case "select":
+        return (
+          <FormControl fullWidth>
+            <FormLabel>{m.label}</FormLabel>
+            <Select
+              value={form[m.key]}
+              onChange={handleChange(m.key)}
+              required
+            >
+              {m.opts.map(([v, lab]) => (
+                <MenuItem key={v} value={v}>{lab}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        );
+      case "radio":
+        return (
+          <FormControl>
+            <FormLabel>{m.label}</FormLabel>
+            <RadioGroup
+              row
+              value={form[m.key]}
+              onChange={handleChange(m.key)}
+            >
+              {m.opts.map(([v, lab]) => (
+                <FormControlLabel
+                  key={v}
+                  value={v}
+                  control={<Radio />}
+                  label={lab}
+                />
+              ))}
+            </RadioGroup>
+          </FormControl>
+        );
+      default: // number
+        return (
+          <TextField
+            type="number"
+            label={m.label}
+            value={form[m.key]}
+            onChange={handleChange(m.key)}
+            helperText={m.helper}
+            fullWidth
+            required
+          />
+        );
+    }
+  };
+
+  /* --- UI ---------------------------------------------------- */
   return (
-    <Container maxWidth="sm">
+    <Container maxWidth="md" sx={{ py: 4 }}>
       <Typography variant="h4" align="center" gutterBottom>
         XAI 당뇨병 예측 플랫폼
       </Typography>
-      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <TextField
-          label="나이"
-          name="age"
-          type="number"
-          value={formData.age}
-          onChange={handleChange}
-          required
-        />
-        <TextField
-          label="BMI"
-          name="bmi"
-          type="number"
-          value={formData.bmi}
-          onChange={handleChange}
-          required
-        />
-        <TextField
-          label="혈당 수치"
-          name="glucose"
-          type="number"
-          value={formData.glucose}
-          onChange={handleChange}
-          required
-        />
-        <TextField
-          label="혈압"
-          name="bloodPressure"
-          type="number"
-          value={formData.bloodPressure}
-          onChange={handleChange}
-          required
-        />
-        <Button type="submit" variant="contained" color="primary">
-          예측하기
-        </Button>
+
+      {/* 입력 폼 */}
+      <Box component="form" onSubmit={handleSubmit}>
+        <Grid container spacing={2}>
+          {FEATURE_META.map((m) => (
+            <Grid item xs={12} sm={6} md={4} key={m.key}>
+              {renderField(m)}
+            </Grid>
+          ))}
+
+          <Grid item xs={12}>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              disabled={loading}
+              fullWidth
+            >
+              {loading ? <CircularProgress size={24} color="inherit" /> : "예측하기"}
+            </Button>
+          </Grid>
+        </Grid>
       </Box>
 
+      {/* 결과 카드 */}
       {result && (
-        <Paper elevation={3} sx={{ mt: 4, p: 2 }}>
-          <Typography variant="h6">[예측 결과]</Typography>
-          <Typography>당뇨병 위험도: {result.risk}% ({result.interpretation})</Typography>
-
-          <Box mt={2}>
-            <Typography variant="subtitle1">[XAI 해석 결과 - SHAP & LIME]</Typography>
-            <List>
-              {result.shapLime.map((item, index) => (
-                <ListItem key={index}>
-                  <ListItemText primary={`${item.feature}: ${item.impact}`} />
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-
-          <Box mt={2}>
-            <Typography variant="subtitle1">[개인 맞춤 건강 가이드]</Typography>
-            <List>
-              <ListItem><ListItemText primary="혈당 수치가 높으므로 식단을 조정하고 정기적인 운동을 권장합니다." /></ListItem>
-              <ListItem><ListItemText primary="나이 50세 이상은 추가적인 건강검진이 필요합니다." /></ListItem>
-              <ListItem><ListItemText primary="BMI가 높다면 체중 관리도 함께 고려해야 합니다." /></ListItem>
-            </List>
-          </Box>
+        <Paper elevation={3} sx={{ mt: 4, p: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            당뇨병 위험도: {result.risk}% ({result.interpretation})
+          </Typography>
+          <ShapChart
+            shap={Object.fromEntries(
+              result.shap.map(({ feature, impact }) => [feature, impact])
+            )}
+          />
         </Paper>
       )}
     </Container>

@@ -1,5 +1,5 @@
-import React from 'react';
-import DiabetesPrediction from './DiabetesPrediction';
+// src/App.js
+import DiabetesPrediction from "./DiabetesPrediction";
 
 function App() {
   return <DiabetesPrediction />;
