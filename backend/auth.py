@@ -25,6 +25,20 @@ class PatchedUserDB(SQLAlchemyUserDatabase):
         data = user_create.model_dump() if hasattr(user_create, "model_dump") else user_create.dict()
         data["hashed_password"] = pwd_context.hash(data.pop("password"))
         return await super().create(data)
+    
+    async def authenticate(self, credentials):
+        user = await self.get_by_email(credentials.username)
+        if user is None:
+            return None
+        if not pwd_context.verify(credentials.password, user.hashed_password):
+            return None
+        return user
+    
+    async def on_after_login(self, user, request, response):
+        pass
+
+    def parse_id(self, value):
+        return UUID(value)
 
 async def get_user_db():
     async with AsyncSessionLocal() as session:

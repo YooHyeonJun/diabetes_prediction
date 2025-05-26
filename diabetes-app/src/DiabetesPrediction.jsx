@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Container, Typography, TextField, Checkbox, FormControlLabel,
   Select, MenuItem, Radio, RadioGroup, FormControl, FormLabel,
-  Button, Grid, Paper, Box, CircularProgress
+  Button, Grid, Paper, Box, CircularProgress, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow
 } from "@mui/material";
-import { predictDiabetes } from "./api";
+import { predictDiabetes, fetchRecords, logout } from "./api";
 import { FEATURE_META, FEATURE_NAMES, buildPayload } from "./utils/payLoad";
 import ShapChart from "./components/ShapChart";
 
@@ -13,8 +14,22 @@ export default function DiabetesPrediction() {
   const [form, setForm] = useState(
     Object.fromEntries(FEATURE_NAMES.map((k) => [k, ""]))
   );
-  const [result,  setResult ] = useState(null);
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  /* --- load history ----------------------------------------- */
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const { data } = await fetchRecords(3);
+        setHistory(data);
+      } catch (err) {
+        console.error("Failed to load history:", err);
+      }
+    };
+    loadHistory();
+  }, []);
 
   /* --- handlers --------------------------------------------- */
   const handleChange = (key) => (e) => {
@@ -36,10 +51,14 @@ export default function DiabetesPrediction() {
         .slice(0, 10);
 
       setResult({
-        risk : +(data.prob * 100).toFixed(1),
+        risk: +(data.prob * 100).toFixed(1),
         interpretation: data.prob > 0.5 ? "High" : "Low",
-        shap : shapArr,
+        shap: shapArr,
       });
+
+      // 새 예측 후 기록 다시 로드
+      const { data: newHistory } = await fetchRecords(3);
+      setHistory(newHistory);
     } catch (err) {
       console.error(err);
       alert("예측 중 오류가 발생했습니다.");
@@ -113,12 +132,70 @@ export default function DiabetesPrediction() {
     }
   };
 
+  /* --- render history comparison ----------------------------- */
+  const renderHistoryComparison = () => {
+    if (history.length === 0) return null;
+
+    return (
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          최근 예측 기록 비교
+        </Typography>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>날짜</TableCell>
+                <TableCell>위험도</TableCell>
+                <TableCell>주요 변화 요인</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {history.map((record, idx) => (
+                <TableRow key={record.id}>
+                  <TableCell>
+                    {new Date(record.created_at).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    {(record.prob * 100).toFixed(1)}%
+                  </TableCell>
+                  <TableCell>
+                    {record.shap
+                      ? Object.entries(record.shap)
+                          .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                          .slice(0, 3)
+                          .map(([feature, impact]) => (
+                            <div key={feature}>
+                              {feature}: {impact > 0 ? "+" : ""}{impact.toFixed(3)}
+                            </div>
+                          ))
+                      : <span style={{color: 'gray'}}>데이터 없음</span>
+                    }
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+    );
+  };
+
   /* --- UI ---------------------------------------------------- */
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Typography variant="h4" align="center" gutterBottom>
         XAI 당뇨병 예측 플랫폼
       </Typography>
+
+      <Button
+        variant="outlined"
+        color="secondary"
+        sx={{ position: "absolute", top: 16, right: 16 }}
+        onClick={logout}
+      >
+        로그아웃
+      </Button>
 
       {/* 입력 폼 */}
       <Box component="form" onSubmit={handleSubmit}>
@@ -156,6 +233,9 @@ export default function DiabetesPrediction() {
           />
         </Paper>
       )}
+
+      {/* 기록 비교 */}
+      {renderHistoryComparison()}
     </Container>
   );
 }

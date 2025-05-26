@@ -18,9 +18,11 @@ export default function Login() {
       setErr("");
       if (isRegister) await registerUser(email, pw);
       const { data } = await loginUser(email, pw);
+      console.log("Login response:", data);  // 응답 데이터 확인
       localStorage.setItem("access_token", data.access_token);
-      nav("/");                              // 예측 페이지로 이동
+      window.location.href = "/";  // 강제로 페이지 새로고침
     } catch (ex) {
+      console.error("Login error:", ex);  // 에러 상세 정보 출력
       setErr(ex.response?.data?.detail || "오류가 발생했습니다.");
     }
   };

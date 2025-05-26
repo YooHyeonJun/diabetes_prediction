@@ -26,3 +26,8 @@ export const predictDiabetes = (payload) => api.post("/predict", { data: payload
 
 export const fetchRecords = (limit = 10) =>
   api.get(`/records?limit=${limit}`);
+
+export const logout = () => {
+  localStorage.removeItem("access_token");
+  window.location.href = "/login";
+};
