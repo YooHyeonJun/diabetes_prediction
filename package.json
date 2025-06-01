@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@mui/icons-material": "^7.1.0",
+    "axios": "^1.9.0",
+    "jspdf": "^3.0.1",
+    "react-scripts": "^5.0.1",
+    "recharts": "^2.15.3"
+  }
+}
